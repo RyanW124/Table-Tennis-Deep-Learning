@@ -72,7 +72,7 @@ class NN(nn.Module):
                     if val_loss > min_val_loss * 1.05:
                         print(f"Stopped at Epoch {epoch}\nLoss: {val_loss}")
                         break
-            # plt.ylim((0, max(losses)/10))
+            plt.ylim((0, self.ylim))
             plt.plot(range(len(losses)), losses)
             plt.show()
         except KeyboardInterrupt:
@@ -82,13 +82,23 @@ class NN2(NN):
         super().__init__(channels, layers)
         self.softmax = nn.Softmax(1)
         self.loss_f = nn.CrossEntropyLoss()
-        self.ylim = 2
+        self.ylim = .5
     # def forward(self, x):
     #     x = super().forward(x)
     #     x = self.softmax(x)
     #     return x
+    def predict(self, x):
+        squeeze = False
+        if x.dim() == 3:
+            x.unsqueeze(0)
+            squeeze = True
+        x = self(x)
+        x = self.softmax(x)
+        if squeeze:
+            x = x.squeeze(0)
+        return x
     def ratio(self, x, y):
-        predictions = self.softmax(self(x))
+        predictions = self.predict(x)
         correct = 0
         total = 0
         for p, l in zip(predictions, y):
