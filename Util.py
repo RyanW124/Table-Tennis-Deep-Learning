@@ -137,3 +137,48 @@ def imshow(img):
 
 def lowhigh(w, margin):
     return int(w/2-margin*w), int(w/2+margin*w)
+class CovidPredictor(nn.Module):
+    def __init__(self, channels, layers, n_features, n_hidden, seq_len, n_layers):
+        super(CovidPredictor, self).__init__()
+        self.n_hidden = n_hidden
+        self.seq_len = seq_len
+        self.n_layers = n_layers
+        self.conv, self.dense = nn.ModuleList(), nn.ModuleList()
+        self.ylim = 1000
+        for i in range(1, len(channels)):
+            self.conv.append(nn.Conv2d(in_channels=channels[i-1], out_channels=channels[i],
+                                kernel_size=K, padding=P))
+        self.relu = nn.ReLU()
+        self.maxpool = nn.MaxPool2d(kernel_size=(2, 2), stride=S)
+        for i in range(1, len(layers)):
+            self.dense.append(nn.Linear(in_features=layers[i-1], out_features=layers[i]))
+        for layer in self.conv+self.dense:
+            nn.init.kaiming_normal_(layer.weight)
+        self.loss_f = nn.MSELoss()
+        self.optimizer = optim.Adam(self.parameters())
+        self.to("cuda:0")
+        self.lstm = nn.LSTM(
+            input_size=n_features,
+            hidden_size=n_hidden,
+            num_layers=n_layers
+        )
+    def reset_hidden_state(self):
+        self.hidden = (
+            torch.zeros(self.n_layers, self.seq_len-1, self.n_hidden),
+            torch.zeros(self.n_layers, self.seq_len-1, self.n_hidden)
+        )
+    def forward(self, x):
+        x = x.view(len(x), 1, -1)
+        for layer in self.conv:
+            x = layer(x)
+            x = self.maxpool(x)
+        lstm_out, self.hidden = self.lstm(
+            x.view(len(x), self.seq_len-1, -1),
+            self.hidden
+        )
+        x = lstm_out.view(self.seq_len-1, len(x), self.n_hidden)[-1]
+        for layer in self.dense[:-1]:
+            x = layer(x)
+            x = self.relu(x)
+        x = self.dense[-1](x)
+        return x
