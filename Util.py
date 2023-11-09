@@ -110,9 +110,9 @@ class NN2(NN):
     
 device = torch.device("cuda:0")
 
-def preprocess(X, y):
-    train_X, test_X, train_y, test_y = train_test_split(X, y)
-    train_X, val_X, train_y, val_y = train_test_split(train_X, train_y)
+def preprocess(X, y, shuffle=True):
+    train_X, test_X, train_y, test_y = train_test_split(X, y, shuffle=shuffle)
+    train_X, val_X, train_y, val_y = train_test_split(train_X, train_y, shuffle=shuffle)
     train_X = torch.from_numpy(train_X).to(device)
     val_X = torch.from_numpy(val_X).to(device)
     test_X = torch.from_numpy(test_X).to(device)
@@ -137,9 +137,9 @@ def imshow(img):
 
 def lowhigh(w, margin):
     return int(w/2-margin*w), int(w/2+margin*w)
-class CovidPredictor(nn.Module):
+class NN3(nn.Module):
     def __init__(self, channels, layers, n_features, n_hidden, seq_len, n_layers):
-        super(CovidPredictor, self).__init__()
+        super().__init__()
         self.n_hidden = n_hidden
         self.seq_len = seq_len
         self.n_layers = n_layers
@@ -154,26 +154,27 @@ class CovidPredictor(nn.Module):
             self.dense.append(nn.Linear(in_features=layers[i-1], out_features=layers[i]))
         for layer in self.conv+self.dense:
             nn.init.kaiming_normal_(layer.weight)
-        self.loss_f = nn.MSELoss()
+        self.loss_f = nn.CrossEntropyLoss()
         self.optimizer = optim.Adam(self.parameters())
         self.to("cuda:0")
         self.lstm = nn.LSTM(
             input_size=n_features,
             hidden_size=n_hidden,
-            num_layers=n_layers
+            num_layers=n_layers,
+            batch_first=True
         )
     def reset_hidden_state(self):
         self.hidden = (
-            torch.zeros(self.n_layers, self.seq_len-1, self.n_hidden),
-            torch.zeros(self.n_layers, self.seq_len-1, self.n_hidden)
+            torch.zeros(self.n_layers, 1, self.n_hidden, device="cuda:0"),
+            torch.zeros(self.n_layers, 1, self.n_hidden, device="cuda:0")
         )
     def forward(self, x):
-        x = x.view(len(x), 1, -1)
+        x = torch.unsqueeze(x, 1)
         for layer in self.conv:
             x = layer(x)
             x = self.maxpool(x)
         lstm_out, self.hidden = self.lstm(
-            x.view(len(x), self.seq_len-1, -1),
+            x.flatten(1).unsqueeze(0),
             self.hidden
         )
         x = lstm_out.view(self.seq_len-1, len(x), self.n_hidden)[-1]
@@ -182,3 +183,56 @@ class CovidPredictor(nn.Module):
             x = self.relu(x)
         x = self.dense[-1](x)
         return x
+    
+    def train_model(self, train_data, train_labels, val_data=None, val_labels=None, num_epochs=100):
+        train_hist = []
+        val_hist = []
+        for t in range(num_epochs):
+
+            epoch_loss = 0
+
+            for idx, seq in enumerate(train_data):
+
+                self.reset_hidden_state()
+
+                # seq = torch.unsqueeze(seq, 0)
+                y_pred = self(seq)
+                loss = self.loss_f(y_pred[0].float(), train_labels[idx]) # calculated loss after 1 step
+
+                # update weights
+                self.optimiser.zero_grad()
+                loss.backward()
+                self.optimiser.step()
+
+                epoch_loss += loss.item()
+SIZE = 200
+def make_data(end, window, rate):
+    cap = cv2.VideoCapture("game_1.mp4")
+    size = window//rate
+    X = np.zeros((end//window, size, SIZE, SIZE), dtype=np.float32)
+    y = np.zeros((end//window))
+    for i in range(0, end-end%window, rate):
+        cap.set(cv2.CAP_PROP_POS_FRAMES, i)
+        _, frame = cap.read()
+        w, h, _ = frame.shape
+        frame = frame[:, :w//2]
+        frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY) 
+        frame = cv2.resize(frame, (SIZE, SIZE))
+        X[i//window, i%window//rate] = frame
+    with open("timestamp.dat", "r") as f:
+        _dict = json.load(f)
+        keys = list(_dict.keys())
+    count = np.zeros((3))
+    current = 0
+    for i in range(end):
+        if i >= float(keys[current]):
+            current += 1
+        count[_dict[keys[current]]] += 1
+        if i % window == window - 1:
+            y[i//window] = np.argmax(count)
+            print(count)
+            count = np.zeros((3))
+    return X, y
+
+
+        
