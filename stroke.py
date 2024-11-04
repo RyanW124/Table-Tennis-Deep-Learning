@@ -20,8 +20,8 @@ from ultralytics import YOLO
 #3 BH back
 #4 FH serve
 #5 BH serve
-#/ NA
-game=1
+#6 NA
+game=4
 with open(f'frames{game}.dat', 'rb') as f:
     data = pickle.load(f)
 cam = cv2.VideoCapture(f"game_{game}.mp4")
