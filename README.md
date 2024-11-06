@@ -1,5 +1,10 @@
 # Table Tennis Deep Learning
- Classify top spin and back spin shots. Videos are taken from the [OpenTTGames](https://lab.osai.ai/) dataset. 
+ Classify top spin and back spin shots. Videos are taken from the [OpenTTGames](https://lab.osai.ai/) dataset.
+
+## Demo
+
+Predicts the shot types of the player on the right.
+[![Demo Link](https://img.youtube.com/vi/xgJ8oSJ4TpE/maxresdefault.jpg)](https://youtu.be/xgJ8oSJ4TpE)
 
 ## Procedure
 
@@ -29,3 +34,8 @@ The positions are then normalized so that the nose of the player is (0, 0). Only
 
 
 For each shot, 12 frames that span across the second before the shot is used. Since the data is sequential, an LSTM was chosen for classifying the data. 
+
+## Limitations
+* Only predicts the right-handed players on the right or left-handed players on the left
+* Does not predict shots that misses the table
+* Camera must be fixed during the video
